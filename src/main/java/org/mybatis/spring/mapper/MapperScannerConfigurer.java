@@ -328,13 +328,17 @@ public class MapperScannerConfigurer
   }
 
   /**
+   * bean注册后执行的钩子(回调)：
+   * 扫描Mapper并注册Mapper Bean
    * {@inheritDoc}
    *
    * @since 1.0.2
    */
   @Override
   public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry registry) {
+    // 默认processPropertyPlaceHolders为true
     if (this.processPropertyPlaceHolders) {
+      // 更新属性并且处理占位符
       processPropertyPlaceHolders();
     }
 
@@ -349,9 +353,11 @@ public class MapperScannerConfigurer
     scanner.setResourceLoader(this.applicationContext);
     scanner.setBeanNameGenerator(this.nameGenerator);
     scanner.setMapperFactoryBeanClass(this.mapperFactoryBeanClass);
+    // 懒加载默认为false
     if (StringUtils.hasText(lazyInitialization)) {
       scanner.setLazyInitialization(Boolean.valueOf(lazyInitialization));
     }
+    // 注册过滤条件（应用annotationClass，markerInterface）
     scanner.registerFilters();
     scanner.scan(
         StringUtils.tokenizeToStringArray(this.basePackage, ConfigurableApplicationContext.CONFIG_LOCATION_DELIMITERS));
@@ -364,6 +370,7 @@ public class MapperScannerConfigurer
    * definition. Then update the values.
    */
   private void processPropertyPlaceHolders() {
+    // key为bean name，value为bean
     Map<String, PropertyResourceConfigurer> prcs = applicationContext.getBeansOfType(PropertyResourceConfigurer.class,
         false, false);
 
@@ -388,6 +395,7 @@ public class MapperScannerConfigurer
       this.sqlSessionTemplateBeanName = updatePropertyValue("sqlSessionTemplateBeanName", values);
       this.lazyInitialization = updatePropertyValue("lazyInitialization", values);
     }
+    // 执行#resolvePlaceholders处理占位符
     this.basePackage = Optional.ofNullable(this.basePackage).map(getEnvironment()::resolvePlaceholders).orElse(null);
     this.sqlSessionFactoryBeanName = Optional.ofNullable(this.sqlSessionFactoryBeanName)
         .map(getEnvironment()::resolvePlaceholders).orElse(null);

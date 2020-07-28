@@ -37,6 +37,8 @@ import org.springframework.util.ClassUtils;
 import org.springframework.util.StringUtils;
 
 /**
+ * 注册{@link MapperScannerConfigurer}
+ *
  * A {@link ImportBeanDefinitionRegistrar} to allow annotation configuration of MyBatis mapper scanning. Using
  * an @Enable annotation allows beans to be registered via @Component configuration, whereas implementing
  * {@code BeanDefinitionRegistryPostProcessor} will work for XML configuration.
@@ -53,7 +55,7 @@ public class MapperScannerRegistrar implements ImportBeanDefinitionRegistrar, Re
 
   /**
    * {@inheritDoc}
-   * 
+   *
    * @deprecated Since 2.0.2, this method not used never.
    */
   @Override
@@ -78,7 +80,10 @@ public class MapperScannerRegistrar implements ImportBeanDefinitionRegistrar, Re
   void registerBeanDefinitions(AnnotationMetadata annoMeta, AnnotationAttributes annoAttrs,
       BeanDefinitionRegistry registry, String beanName) {
 
+    // 通过BeanDefinitionBuilder构建MapperScannerConfigurer的BeanDefinition
     BeanDefinitionBuilder builder = BeanDefinitionBuilder.genericBeanDefinition(MapperScannerConfigurer.class);
+
+    // 将@MapperScan注解上的属性赋值到MapperScannerConfigurer的BeanDefinition中
     builder.addPropertyValue("processPropertyPlaceHolders", true);
 
     Class<? extends Annotation> annotationClass = annoAttrs.getClass("annotationClass");
@@ -118,10 +123,12 @@ public class MapperScannerRegistrar implements ImportBeanDefinitionRegistrar, Re
     basePackages.addAll(Arrays.stream(annoAttrs.getStringArray("basePackages")).filter(StringUtils::hasText)
         .collect(Collectors.toList()));
 
+    // basePackageClasses指定的是扫描类所在的目录
     basePackages.addAll(Arrays.stream(annoAttrs.getClassArray("basePackageClasses")).map(ClassUtils::getPackageName)
         .collect(Collectors.toList()));
 
     if (basePackages.isEmpty()) {
+      // 如果basePackages为空，则添加注解所在的包目录
       basePackages.add(getDefaultBasePackage(annoMeta));
     }
 
@@ -130,6 +137,7 @@ public class MapperScannerRegistrar implements ImportBeanDefinitionRegistrar, Re
       builder.addPropertyValue("lazyInitialization", lazyInitialization);
     }
 
+    // basePackages拼接，','隔开
     builder.addPropertyValue("basePackage", StringUtils.collectionToCommaDelimitedString(basePackages));
 
     registry.registerBeanDefinition(beanName, builder.getBeanDefinition());
@@ -146,7 +154,7 @@ public class MapperScannerRegistrar implements ImportBeanDefinitionRegistrar, Re
 
   /**
    * A {@link MapperScannerRegistrar} for {@link MapperScans}.
-   * 
+   *
    * @since 2.0.0
    */
   static class RepeatingRegistrar extends MapperScannerRegistrar {

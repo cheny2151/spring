@@ -29,6 +29,7 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.dao.TransientDataAccessResourceException;
 import org.springframework.dao.support.PersistenceExceptionTranslator;
 import org.springframework.jdbc.datasource.DataSourceUtils;
+import org.springframework.transaction.support.AbstractPlatformTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronizationAdapter;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
@@ -94,16 +95,20 @@ public final class SqlSessionUtils {
     notNull(sessionFactory, NO_SQL_SESSION_FACTORY_SPECIFIED);
     notNull(executorType, NO_EXECUTOR_TYPE_SPECIFIED);
 
+    // 尝试从当前线程中获取sessionHolder
     SqlSessionHolder holder = (SqlSessionHolder) TransactionSynchronizationManager.getResource(sessionFactory);
 
+    // 从当前线程绑定的sessionHolder中获取SqlSession
     SqlSession session = sessionHolder(executorType, holder);
     if (session != null) {
       return session;
     }
 
+    // 不存在则新建
     LOGGER.debug(() -> "Creating a new SqlSession");
     session = sessionFactory.openSession(executorType);
 
+    // 注册(缓存)当前SqlSession
     registerSessionHolder(sessionFactory, executorType, exceptionTranslator, session);
 
     return session;
@@ -115,7 +120,7 @@ public final class SqlSessionUtils {
    * Note: The DataSource used by the Environment should be synchronized with the transaction either through
    * DataSourceTxMgr or another tx synchronization. Further assume that if an exception is thrown, whatever started the
    * transaction will handle closing / rolling back the Connection associated with the SqlSession.
-   * 
+   *
    * @param sessionFactory
    *          sqlSessionFactory used for registration.
    * @param executorType
@@ -128,13 +133,16 @@ public final class SqlSessionUtils {
   private static void registerSessionHolder(SqlSessionFactory sessionFactory, ExecutorType executorType,
       PersistenceExceptionTranslator exceptionTranslator, SqlSession session) {
     SqlSessionHolder holder;
+    // 若存在事务则缓存SqlSession
     if (TransactionSynchronizationManager.isSynchronizationActive()) {
       Environment environment = sessionFactory.getConfiguration().getEnvironment();
 
       if (environment.getTransactionFactory() instanceof SpringManagedTransactionFactory) {
         LOGGER.debug(() -> "Registering transaction synchronization for SqlSession [" + session + "]");
 
+        // 创建SqlSessionHolder
         holder = new SqlSessionHolder(session, executorType, exceptionTranslator);
+        // 注册TransactionSynchronizationAdapter，绑定到当前线程变量
         TransactionSynchronizationManager.bindResource(sessionFactory, holder);
         TransactionSynchronizationManager
             .registerSynchronization(new SqlSessionSynchronization(holder, sessionFactory));
@@ -150,12 +158,16 @@ public final class SqlSessionUtils {
         }
       }
     } else {
+      // 不存在事务
       LOGGER.debug(() -> "SqlSession [" + session
           + "] was not registered for synchronization because synchronization is not active");
     }
 
   }
 
+  /**
+   * 从holder获取SqlSession，若存在事务则校验executorType不可变
+   */
   private static SqlSession sessionHolder(ExecutorType executorType, SqlSessionHolder holder) {
     SqlSession session = null;
     if (holder != null && holder.isSynchronizedWithTransaction()) {
@@ -188,9 +200,11 @@ public final class SqlSessionUtils {
 
     SqlSessionHolder holder = (SqlSessionHolder) TransactionSynchronizationManager.getResource(sessionFactory);
     if ((holder != null) && (holder.getSqlSession() == session)) {
+      // 存在事务并且为当前SqlSession
       LOGGER.debug(() -> "Releasing transactional SqlSession [" + session + "]");
       holder.released();
     } else {
+      // 不存在事务直接关闭session
       LOGGER.debug(() -> "Closing non transactional SqlSession [" + session + "]");
       session.close();
     }
@@ -267,6 +281,10 @@ public final class SqlSessionUtils {
     }
 
     /**
+     * 见{@link AbstractPlatformTransactionManager#processCommit(org.springframework.transaction.support.DefaultTransactionStatus)}的
+     * this.triggerBeforeCommit(status);
+     * 执行{@link SqlSession#commit()}
+     *
      * {@inheritDoc}
      */
     @Override
@@ -295,12 +313,17 @@ public final class SqlSessionUtils {
     }
 
     /**
+     * 见{@link AbstractPlatformTransactionManager#processCommit(org.springframework.transaction.support.DefaultTransactionStatus)}的
+     * this.triggerBeforeCompletion(status);
+     * 执行{@link SqlSession#close()}
+     *
      * {@inheritDoc}
      */
     @Override
     public void beforeCompletion() {
       // Issue #18 Close SqlSession and deregister it now
       // because afterCompletion may be called from a different thread
+      // SqlSessionHolder.referenceCount计数为0则执行close
       if (!this.holder.isOpen()) {
         LOGGER
             .debug(() -> "Transaction synchronization deregistering SqlSession [" + this.holder.getSqlSession() + "]");
@@ -312,10 +335,14 @@ public final class SqlSessionUtils {
     }
 
     /**
+     *  见{@link AbstractPlatformTransactionManager#processCommit(org.springframework.transaction.support.DefaultTransactionStatus)}
+     *  执行{@link SqlSession#close()}
+     *
      * {@inheritDoc}
      */
     @Override
     public void afterCompletion(int status) {
+      // holderActive为true，则证明还未执行SqlSession#close()，此时再执行关闭
       if (this.holderActive) {
         // afterCompletion may have been called from a different thread
         // so avoid failing if there is nothing in this one
@@ -326,6 +353,7 @@ public final class SqlSessionUtils {
         LOGGER.debug(() -> "Transaction synchronization closing SqlSession [" + this.holder.getSqlSession() + "]");
         this.holder.getSqlSession().close();
       }
+      // 清除计数
       this.holder.reset();
     }
   }

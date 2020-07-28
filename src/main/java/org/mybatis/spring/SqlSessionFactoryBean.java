@@ -93,14 +93,26 @@ public class SqlSessionFactoryBean
   private static final ResourcePatternResolver RESOURCE_PATTERN_RESOLVER = new PathMatchingResourcePatternResolver();
   private static final MetadataReaderFactory METADATA_READER_FACTORY = new CachingMetadataReaderFactory();
 
+  /**
+   * Configuration配置资源路径
+   */
   private Resource configLocation;
 
+  /**
+   * mybatis的Configuration
+   */
   private Configuration configuration;
 
+  /**
+   * Mapper资源路径
+   */
   private Resource[] mapperLocations;
 
   private DataSource dataSource;
 
+  /**
+   * 默认为{@link SpringManagedTransactionFactory}
+   */
   private TransactionFactory transactionFactory;
 
   private Properties configurationProperties;
@@ -484,13 +496,16 @@ public class SqlSessionFactoryBean
   public void afterPropertiesSet() throws Exception {
     notNull(dataSource, "Property 'dataSource' is required");
     notNull(sqlSessionFactoryBuilder, "Property 'sqlSessionFactoryBuilder' is required");
+    // configuration与configLocation必须并且只能存在一个
     state((configuration == null && configLocation == null) || !(configuration != null && configLocation != null),
         "Property 'configuration' and 'configLocation' can not specified with together");
 
+    // 初始化mybatis相关配置（包括Mapper.xml）,并创建SqlSessionFactory。
     this.sqlSessionFactory = buildSqlSessionFactory();
   }
 
   /**
+   * 创建mybatis的SqlSessionFactory入口
    * Build a {@code SqlSessionFactory} instance.
    *
    * The default implementation uses the standard MyBatis {@code XMLConfigBuilder} API to build a
@@ -514,6 +529,7 @@ public class SqlSessionFactoryBean
         targetConfiguration.getVariables().putAll(this.configurationProperties);
       }
     } else if (this.configLocation != null) {
+      // 通过加载XML配置加载Configuration
       xmlConfigBuilder = new XMLConfigBuilder(this.configLocation.getInputStream(), null, this.configurationProperties);
       targetConfiguration = xmlConfigBuilder.getConfiguration();
     } else {
@@ -581,6 +597,7 @@ public class SqlSessionFactoryBean
 
     Optional.ofNullable(this.cache).ifPresent(targetConfiguration::addCache);
 
+    // 解析XML配置内容覆盖原Configuration
     if (xmlConfigBuilder != null) {
       try {
         xmlConfigBuilder.parse();
@@ -592,10 +609,12 @@ public class SqlSessionFactoryBean
       }
     }
 
+    // ⭐设置SpringManagedTransactionFactory,dataSource->Environment->Configuration
     targetConfiguration.setEnvironment(new Environment(this.environment,
         this.transactionFactory == null ? new SpringManagedTransactionFactory() : this.transactionFactory,
         this.dataSource));
 
+    // 加载Mapper.xml
     if (this.mapperLocations != null) {
       if (this.mapperLocations.length == 0) {
         LOGGER.warn(() -> "Property 'mapperLocations' was specified but matching resources are not found.");
@@ -605,6 +624,7 @@ public class SqlSessionFactoryBean
             continue;
           }
           try {
+            // 使用mybatis的XMLMapperBuilder类解析Mapper.xml
             XMLMapperBuilder xmlMapperBuilder = new XMLMapperBuilder(mapperLocation.getInputStream(),
                 targetConfiguration, mapperLocation.toString(), targetConfiguration.getSqlFragments());
             xmlMapperBuilder.parse();
@@ -620,15 +640,19 @@ public class SqlSessionFactoryBean
       LOGGER.debug(() -> "Property 'mapperLocations' was not specified.");
     }
 
+    // 创建DefaultSqlSessionFactory（将此前解析完成的Configuration传入，由此可见mybatis一个重要的类为Configuration，其包含了将近mybatis的所有运行属性/变量）
     return this.sqlSessionFactoryBuilder.build(targetConfiguration);
   }
 
   /**
+   * 入口：
+   * 实际application初始化时，调用此方法获取bean => SqlSessionFactory
    * {@inheritDoc}
    */
   @Override
   public SqlSessionFactory getObject() throws Exception {
     if (this.sqlSessionFactory == null) {
+      // 校验状态后，调用#buildSqlSessionFactory初始化mybatis相关配置（包括Mapper.xml）,并创建SqlSessionFactory。
       afterPropertiesSet();
     }
 

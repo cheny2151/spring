@@ -46,6 +46,7 @@ import org.springframework.beans.factory.FactoryBean;
  * </pre>
  * <p>
  * Note that this factory can only inject <em>interfaces</em>, not concrete classes.
+ * 实现FactoryBean，{@link #getObject()}返回注册的bean
  *
  * @author Eduardo Macarron
  *
@@ -53,6 +54,9 @@ import org.springframework.beans.factory.FactoryBean;
  */
 public class MapperFactoryBean<T> extends SqlSessionDaoSupport implements FactoryBean<T> {
 
+  /**
+   * Mapper接口
+   */
   private Class<T> mapperInterface;
 
   private boolean addToConfig = true;
@@ -66,6 +70,8 @@ public class MapperFactoryBean<T> extends SqlSessionDaoSupport implements Factor
   }
 
   /**
+   * 创建bean并设置完属性后回调{@link #afterPropertiesSet()},该方法调用此方法：
+   * 将Mapper接口添加到mybatis中
    * {@inheritDoc}
    */
   @Override
@@ -77,6 +83,7 @@ public class MapperFactoryBean<T> extends SqlSessionDaoSupport implements Factor
     Configuration configuration = getSqlSession().getConfiguration();
     if (this.addToConfig && !configuration.hasMapper(this.mapperInterface)) {
       try {
+        // Mapper接口添加到mybatis的Configuration
         configuration.addMapper(this.mapperInterface);
       } catch (Exception e) {
         logger.error("Error while adding the mapper '" + this.mapperInterface + "' to configuration.", e);
@@ -88,6 +95,7 @@ public class MapperFactoryBean<T> extends SqlSessionDaoSupport implements Factor
   }
 
   /**
+   * 返回注册的Bean
    * {@inheritDoc}
    */
   @Override

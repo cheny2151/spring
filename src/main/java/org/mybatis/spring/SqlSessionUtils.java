@@ -281,6 +281,7 @@ public final class SqlSessionUtils {
     }
 
     /**
+     * 事务commit前的回调：
      * 见{@link AbstractPlatformTransactionManager#processCommit(org.springframework.transaction.support.DefaultTransactionStatus)}的
      * this.triggerBeforeCommit(status);
      * 执行{@link SqlSession#commit()}
@@ -313,6 +314,7 @@ public final class SqlSessionUtils {
     }
 
     /**
+     * 事务完成前的回调：
      * 见{@link AbstractPlatformTransactionManager#processCommit(org.springframework.transaction.support.DefaultTransactionStatus)}的
      * this.triggerBeforeCompletion(status);
      * 执行{@link SqlSession#close()}
@@ -335,8 +337,9 @@ public final class SqlSessionUtils {
     }
 
     /**
-     *  见{@link AbstractPlatformTransactionManager#processCommit(org.springframework.transaction.support.DefaultTransactionStatus)}
-     *  执行{@link SqlSession#close()}
+     * 事务完成后的回调：
+     * 见{@link AbstractPlatformTransactionManager#processCommit(org.springframework.transaction.support.DefaultTransactionStatus)}
+     * 执行{@link SqlSession#close()}
      *
      * {@inheritDoc}
      */
